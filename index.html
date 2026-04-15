@@ -3,98 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluetooth Motor</title>
+    <title>Bluetooth Curtains Dual</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
-        .btn { display: block; width: 100%; max-width: 300px; margin: 15px auto; padding: 25px; font-size: 24px; font-weight: bold; color: white; border: none; border-radius: 15px; text-decoration: none; cursor: pointer;}
+        body { font-family: sans-serif; text-align: center; background: #121212; color: white; padding: 20px; }
+        .card { background: #1e1e1e; padding: 15px; border-radius: 15px; margin: 20px auto; max-width: 350px; border: 1px solid #333; }
+        .btn { display: inline-block; width: 30%; margin: 5px; padding: 15px 5px; font-size: 14px; font-weight: bold; color: white; border: none; border-radius: 10px; cursor: pointer; text-transform: uppercase;}
         .open { background: #4CAF50; } .close { background: #2196F3; } .stop { background: #f44336; }
-        .slider-container { background: white; padding: 20px; border-radius: 15px; max-width: 300px; margin: 20px auto; }
-        .slider { width: 100%; height: 50px; cursor: pointer; }
-        #status { font-weight: bold; margin-bottom: 20px; }
+        .connect-btn { background: #ff9800; padding: 20px; width: 100%; max-width: 300px; font-size: 18px; }
+        .slider { width: 90%; height: 40px; cursor: pointer; margin-top: 10px; }
+        #status { font-weight: bold; margin-bottom: 20px; color: #bbb; }
         .hidden { display: none; }
+        h3 { margin: 10px 0; font-size: 16px; color: #4CAF50; }
     </style>
 </head>
 <body>
-    <h2>Web Bluetooth Motor</h2>
+    <h2>Web Curtains Control</h2>
     <div id="status">Статус: Отключено</div>
-    <button class="btn open" id="connectBtn">ПОДКЛЮЧИТЬ</button>
+    <button class="btn connect-btn" id="connectBtn">ПОДКЛЮЧИТЬ УСТРОЙСТВО</button>
 
     <div id="controls" class="hidden">
-        <button class="btn open" onclick="sendCmd('f')">ВПЕРЁД</button>
-        <button class="btn close" onclick="sendCmd('b')">НАЗАД</button>
-        <button class="btn stop" onclick="sendCmd('s')">СТОП</button>
+        <div class="card">
+            <h3>ЛЕВАЯ ШТОРА (1)</h3>
+            <button class="btn open" onclick="sendCmd('f1')">ОТКР</button>
+            <button class="btn close" onclick="sendCmd('b1')">ЗАКР</button>
+            <button class="btn stop" onclick="sendCmd('s1')">СТОП</button>
+            <p>Скорость: <span id="val1">150</span></p>
+            <input type="range" min="0" max="255" value="150" class="slider" oninput="sendSpeed('1', this.value)">
+        </div>
 
-        <div class="slider-container">
-            <h3>Скорость: <span id="val">150</span></h3>
-            <input type="range" min="0" max="255" value="150" class="slider" oninput="sendSpeed(this.value)">
+        <div class="card">
+            <h3>ПРАВАЯ ШТОРА (2)</h3>
+            <button class="btn open" onclick="sendCmd('f2')">ОТКР</button>
+            <button class="btn close" onclick="sendCmd('b2')">ЗАКР</button>
+            <button class="btn stop" onclick="sendCmd('s2')">СТОП</button>
+            <p>Скорость: <span id="val2">150</span></p>
+            <input type="range" min="0" max="255" value="150" class="slider" oninput="sendSpeed('2', this.value)">
         </div>
     </div>
 
     <script>
-        // UUID должны строго совпадать с кодом в ESP32!
-const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-const CMD_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
-const SPD_CHAR_UUID = 'd070b4f8-1e43-43f6-953b-e0ac7154fb0e';
+        const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+        const CMD_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+        const SPD_A_CHAR_UUID = 'd070b4f8-1e43-43f6-953b-e0ac7154fb0e';
+        const SPD_B_CHAR_UUID = 'e185c5f9-2d54-54f7-464c-f9bd82650c1f';
 
-let curtainDevice = null;
-let cmdCharacteristic = null;
-let spdCharacteristic = null;
-let lastTime = 0;
+        let cmdChar = null;
+        let spdAChar = null;
+        let spdBChar = null;
+        let lastTime = 0;
 
-document.getElementById('connectBtn').addEventListener('click', async () => {
-    try {
-        const statusEl = document.getElementById('status');
-        statusEl.innerHTML = 'Поиск устройства...';
-        
-        // Поиск по имени, чтобы Chrome точно увидел плату
-        curtainDevice = await navigator.bluetooth.requestDevice({
-            filters: [{ name: 'Web Curtains' }],
-            optionalServices: [SERVICE_UUID]
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                const statusEl = document.getElementById('status');
+                statusEl.innerHTML = 'Поиск...';
+                
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Web Curtains Dual' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                statusEl.innerHTML = 'Подключение...';
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                
+                cmdChar = await service.getCharacteristic(CMD_CHAR_UUID);
+                spdAChar = await service.getCharacteristic(SPD_A_CHAR_UUID);
+                spdBChar = await service.getCharacteristic(SPD_B_CHAR_UUID);
+
+                statusEl.innerHTML = 'Статус: Подключено! <span style="color:#4CAF50">●</span>';
+                document.getElementById('connectBtn').classList.add('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').innerHTML = 'Ошибка: ' + error.message;
+            }
         });
 
-        statusEl.innerHTML = 'Подключение к GATT...';
-        const server = await curtainDevice.gatt.connect();
-        
-        statusEl.innerHTML = 'Поиск сервиса...';
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        
-        statusEl.innerHTML = 'Настройка управления...';
-        cmdCharacteristic = await service.getCharacteristic(CMD_CHAR_UUID);
-        spdCharacteristic = await service.getCharacteristic(SPD_CHAR_UUID);
+        async function sendCmd(cmd) {
+            if (cmdChar) {
+                try {
+                    await cmdChar.writeValue(new TextEncoder().encode(cmd));
+                } catch (e) { console.log(e); }
+            }
+        }
 
-        statusEl.innerHTML = 'Статус: Подключено! <span style="color:green">●</span>';
-        statusEl.style.color = 'green';
-        document.getElementById('connectBtn').classList.add('hidden');
-        document.getElementById('controls').classList.remove('hidden');
-
-    } catch (error) {
-        console.error(error);
-        document.getElementById('status').innerHTML = 'Ошибка: ' + error.message;
-        document.getElementById('status').style.color = 'red';
-    }
-});
-
-async function sendCmd(cmd) {
-    if (cmdCharacteristic) {
-        try {
-            const data = new TextEncoder().encode(cmd);
-            await cmdCharacteristic.writeValue(data);
-        } catch (e) { console.log('Ошибка кнопки: ' + e); }
-    }
-}
-
-async function sendSpeed(val) {
-    document.getElementById('val').innerHTML = val;
-    let now = Date.now();
-    // Троттлинг 100мс, чтобы не "заспамить" Bluetooth
-    if (now - lastTime > 100 && spdCharacteristic) {
-        try {
-            const data = new TextEncoder().encode(val.toString());
-            await spdCharacteristic.writeValue(data);
-            lastTime = now;
-        } catch (e) { console.log('Ошибка скорости: ' + e); }
-    }
-}
+        async function sendSpeed(motor, val) {
+            document.getElementById('val' + motor).innerHTML = val;
+            let now = Date.now();
+            if (now - lastTime > 100) {
+                try {
+                    const char = (motor === '1') ? spdAChar : spdBChar;
+                    if (char) {
+                        await char.writeValue(new TextEncoder().encode(val.toString()));
+                        lastTime = now;
+                    }
+                } catch (e) { console.log(e); }
+            }
+        }
     </script>
 </body>
 </html>
