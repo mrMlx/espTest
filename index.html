@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluetooth Шторы</title>
+    <title>Bluetooth Motor</title>
     <style>
         body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
         .btn { display: block; width: 100%; max-width: 300px; margin: 15px auto; padding: 25px; font-size: 24px; font-weight: bold; color: white; border: none; border-radius: 15px; text-decoration: none; cursor: pointer;}
@@ -15,13 +15,13 @@
     </style>
 </head>
 <body>
-    <h2>Web Bluetooth Шторы</h2>
+    <h2>Web Bluetooth Motor</h2>
     <div id="status">Статус: Отключено</div>
     <button class="btn open" id="connectBtn">ПОДКЛЮЧИТЬ</button>
 
     <div id="controls" class="hidden">
-        <button class="btn open" onclick="sendCmd('f')">ОТКРЫТЬ</button>
-        <button class="btn close" onclick="sendCmd('b')">ЗАКРЫТЬ</button>
+        <button class="btn open" onclick="sendCmd('f')">ВПЕРЁД</button>
+        <button class="btn close" onclick="sendCmd('b')">НАЗАД</button>
         <button class="btn stop" onclick="sendCmd('s')">СТОП</button>
 
         <div class="slider-container">
