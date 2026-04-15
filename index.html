@@ -31,70 +31,70 @@
     </div>
 
     <script>
-        // UUID должны точно совпадать с кодом ESP32!
-        const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-        const CMD_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
-        const SPD_CHAR_UUID = 'd070b4f8-1e43-43f6-953b-e0ac7154fb0e';
+        // UUID должны строго совпадать с кодом в ESP32!
+const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const CMD_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+const SPD_CHAR_UUID = 'd070b4f8-1e43-43f6-953b-e0ac7154fb0e';
 
-        let curtainDevice = null;
-        let cmdCharacteristic = null;
-        let spdCharacteristic = null;
-        let lastTime = 0; // Для троттлинга скорости
+let curtainDevice = null;
+let cmdCharacteristic = null;
+let spdCharacteristic = null;
+let lastTime = 0;
 
-        // Функция подключения
-        document.getElementById('connectBtn').addEventListener('click', async () => {
-            try {
-                // Ищем устройство с нашим сервисом
-                curtainDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [SERVICE_UUID] }]
-                });
-
-                document.getElementById('status').innerHTML = 'Статус: Подключение...';
-                
-                // Подключаемся к GATT серверу
-                const server = await curtainDevice.gatt.connect();
-                // Получаем сервис
-                const service = await server.getPrimaryService(SERVICE_UUID);
-                // Получаем обе характеристики
-                cmdCharacteristic = await service.getCharacteristic(CMD_CHAR_UUID);
-                spdCharacteristic = await service.getCharacteristic(SPD_CHAR_UUID);
-
-                document.getElementById('status').innerHTML = 'Статус: Подключено! <span style="color:green">●</span>';
-                document.getElementById('status').style.color = 'green';
-                document.getElementById('connectBtn').classList.add('hidden');
-                document.getElementById('controls').classList.remove('hidden');
-
-            } catch (error) {
-                console.log('Ошибка подключения: ' + error);
-                document.getElementById('status').innerHTML = 'Статус: Ошибка!';
-                document.getElementById('status').style.color = 'red';
-            }
+document.getElementById('connectBtn').addEventListener('click', async () => {
+    try {
+        const statusEl = document.getElementById('status');
+        statusEl.innerHTML = 'Поиск устройства...';
+        
+        // Поиск по имени, чтобы Chrome точно увидел плату
+        curtainDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ name: 'Web Curtains' }],
+            optionalServices: [SERVICE_UUID]
         });
 
-        // Отправка команды кнопок (Forward, Backward, Stop)
-        async function sendCmd(cmd) {
-            if (cmdCharacteristic) {
-                // Web Bluetooth требует отправлять DataView или Uint8Array
-                const encoder = new TextEncoder();
-                const data = encoder.encode(cmd);
-                await cmdCharacteristic.writeValue(data);
-                console.log('Отправлена кнопка: ' + cmd);
-            }
-        }
+        statusEl.innerHTML = 'Подключение к GATT...';
+        const server = await curtainDevice.gatt.connect();
+        
+        statusEl.innerHTML = 'Поиск сервиса...';
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        
+        statusEl.innerHTML = 'Настройка управления...';
+        cmdCharacteristic = await service.getCharacteristic(CMD_CHAR_UUID);
+        spdCharacteristic = await service.getCharacteristic(SPD_CHAR_UUID);
 
-        // Отправка скорости (ползунок) с троттлингом 80мс
-        async function sendSpeed(val) {
-            document.getElementById('val').innerHTML = val;
-            let now = Date.now();
-            if (now - lastTime > 80 && spdCharacteristic) {
-                // Преобразуем число ползунка в строку и отправляем
-                const encoder = new TextEncoder();
-                const data = encoder.encode(val.toString());
-                await spdCharacteristic.writeValue(data);
-                lastTime = now;
-                console.log('Отправлена скорость: ' + val);
-            }
-        }
+        statusEl.innerHTML = 'Статус: Подключено! <span style="color:green">●</span>';
+        statusEl.style.color = 'green';
+        document.getElementById('connectBtn').classList.add('hidden');
+        document.getElementById('controls').classList.remove('hidden');
+
+    } catch (error) {
+        console.error(error);
+        document.getElementById('status').innerHTML = 'Ошибка: ' + error.message;
+        document.getElementById('status').style.color = 'red';
+    }
+});
+
+async function sendCmd(cmd) {
+    if (cmdCharacteristic) {
+        try {
+            const data = new TextEncoder().encode(cmd);
+            await cmdCharacteristic.writeValue(data);
+        } catch (e) { console.log('Ошибка кнопки: ' + e); }
+    }
+}
+
+async function sendSpeed(val) {
+    document.getElementById('val').innerHTML = val;
+    let now = Date.now();
+    // Троттлинг 100мс, чтобы не "заспамить" Bluetooth
+    if (now - lastTime > 100 && spdCharacteristic) {
+        try {
+            const data = new TextEncoder().encode(val.toString());
+            await spdCharacteristic.writeValue(data);
+            lastTime = now;
+        } catch (e) { console.log('Ошибка скорости: ' + e); }
+    }
+}
     </script>
 </body>
 </html>
