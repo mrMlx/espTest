@@ -2,66 +2,99 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Шторы Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluetooth Motor</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #121212; color: white; }
-        .motor-card { background: #1e1e1e; padding: 20px; border-radius: 15px; margin: 15px; border: 1px solid #333; }
-        button { padding: 15px 20px; font-size: 16px; margin: 5px; border-radius: 8px; border: none; font-weight: bold; }
-        .fwd { background: #4CAF50; color: white; }
-        .rev { background: #2196F3; color: white; }
-        .stop { background: #f44336; color: white; }
-        input[type=range] { width: 90%; height: 25px; margin-top: 20px; }
+        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
+        .btn { display: block; width: 100%; max-width: 300px; margin: 15px auto; padding: 25px; font-size: 24px; font-weight: bold; color: white; border: none; border-radius: 15px; text-decoration: none; cursor: pointer;}
+        .open { background: #4CAF50; } .close { background: #2196F3; } .stop { background: #f44336; }
+        .slider-container { background: white; padding: 20px; border-radius: 15px; max-width: 300px; margin: 20px auto; }
+        .slider { width: 100%; height: 50px; cursor: pointer; }
+        #status { font-weight: bold; margin-bottom: 20px; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <h2>Управление шторами</h2>
-    <button id="connect" style="background: #ff9800; padding: 20px;">ПОДКЛЮЧИТЬ BLE</button>
-    
-    <div id="ui" style="display:none;">
-        <div class="motor-card">
-            <h3>Левая штора (A)</h3>
-            <button class="fwd" onclick="cmd('Af')">ОТКРЫТЬ</button>
-            <button class="rev" onclick="cmd('Ab')">ЗАКРЫТЬ</button>
-            <button class="stop" onclick="cmd('As')">СТОП</button>
-            <input type="range" min="0" max="255" value="150" onchange="spd('A', this.value)">
-        </div>
+    <h2>Web Bluetooth Motor</h2>
+    <div id="status">Статус: Отключено</div>
+    <button class="btn open" id="connectBtn">ПОДКЛЮЧИТЬ</button>
 
-        <div class="motor-card">
-            <h3>Правая штора (B)</h3>
-            <button class="fwd" onclick="cmd('Bf')">ОТКРЫТЬ</button>
-            <button class="rev" onclick="cmd('Bb')">ЗАКРЫТЬ</button>
-            <button class="stop" onclick="cmd('Bs')">СТОП</button>
-            <input type="range" min="0" max="255" value="150" onchange="spd('B', this.value)">
+    <div id="controls" class="hidden">
+        <button class="btn open" onclick="sendCmd('f')">ВПЕРЁД</button>
+        <button class="btn close" onclick="sendCmd('b')">НАЗАД</button>
+        <button class="btn stop" onclick="sendCmd('s')">СТОП</button>
+
+        <div class="slider-container">
+            <h3>Скорость: <span id="val">150</span></h3>
+            <input type="range" min="0" max="255" value="150" class="slider" oninput="sendSpeed(this.value)">
         </div>
     </div>
 
-<script>
-let cC, sA, sB;
-const S_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    <script>
+        // UUID должны строго совпадать с кодом в ESP32!
+const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const CMD_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+const SPD_CHAR_UUID = 'd070b4f8-1e43-43f6-953b-e0ac7154fb0e';
 
-document.getElementById('connect').onclick = async () => {
-    const dev = await navigator.bluetooth.requestDevice({
-        filters: [{name: 'Motor Control Dual'}],
-        optionalServices: [S_UUID]
-    });
-    const server = await dev.gatt.connect();
-    const service = await server.getPrimaryService(S_UUID);
-    cC = await service.getCharacteristic("beb5483e-36e1-4688-b7f5-ea07361b26a8");
-    sA = await service.getCharacteristic("d074b4f8-1c43-43f6-353b-e8ac7154fb0e");
-    sB = await service.getCharacteristic("e185c5f9-2d54-54f7-464c-f9bd82650c1f");
-    document.getElementById('ui').style.display = 'block';
-    document.getElementById('connect').style.display = 'none';
-};
+let curtainDevice = null;
+let cmdCharacteristic = null;
+let spdCharacteristic = null;
+let lastTime = 0;
 
-async function cmd(v) { if(cC) await cC.writeValue(new TextEncoder().encode(v)); }
-async function spd(m, v) { 
-    let char = (m === 'A') ? sA : sB;
-    if(char) {
-        let data = new TextEncoder().encode(v.toString());
-        await char.writeValue(data);
+document.getElementById('connectBtn').addEventListener('click', async () => {
+    try {
+        const statusEl = document.getElementById('status');
+        statusEl.innerHTML = 'Поиск устройства...';
+        
+        // Поиск по имени, чтобы Chrome точно увидел плату
+        curtainDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ name: 'Web Curtains' }],
+            optionalServices: [SERVICE_UUID]
+        });
+
+        statusEl.innerHTML = 'Подключение к GATT...';
+        const server = await curtainDevice.gatt.connect();
+        
+        statusEl.innerHTML = 'Поиск сервиса...';
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        
+        statusEl.innerHTML = 'Настройка управления...';
+        cmdCharacteristic = await service.getCharacteristic(CMD_CHAR_UUID);
+        spdCharacteristic = await service.getCharacteristic(SPD_CHAR_UUID);
+
+        statusEl.innerHTML = 'Статус: Подключено! <span style="color:green">●</span>';
+        statusEl.style.color = 'green';
+        document.getElementById('connectBtn').classList.add('hidden');
+        document.getElementById('controls').classList.remove('hidden');
+
+    } catch (error) {
+        console.error(error);
+        document.getElementById('status').innerHTML = 'Ошибка: ' + error.message;
+        document.getElementById('status').style.color = 'red';
+    }
+});
+
+async function sendCmd(cmd) {
+    if (cmdCharacteristic) {
+        try {
+            const data = new TextEncoder().encode(cmd);
+            await cmdCharacteristic.writeValue(data);
+        } catch (e) { console.log('Ошибка кнопки: ' + e); }
     }
 }
-</script>
+
+async function sendSpeed(val) {
+    document.getElementById('val').innerHTML = val;
+    let now = Date.now();
+    // Троттлинг 100мс, чтобы не "заспамить" Bluetooth
+    if (now - lastTime > 100 && spdCharacteristic) {
+        try {
+            const data = new TextEncoder().encode(val.toString());
+            await spdCharacteristic.writeValue(data);
+            lastTime = now;
+        } catch (e) { console.log('Ошибка скорости: ' + e); }
+    }
+}
+    </script>
 </body>
 </html>
