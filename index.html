@@ -57,7 +57,10 @@ document.getElementById('connect').onclick = async () => {
 async function cmd(v) { if(cC) await cC.writeValue(new TextEncoder().encode(v)); }
 async function spd(m, v) { 
     let char = (m === 'A') ? sA : sB;
-    if(char) await char.writeValue(new TextEncoder().encode(v)); 
+    if(char) {
+        let data = new TextEncoder().encode(v.toString());
+        await char.writeValue(data);
+    }
 }
 </script>
 </body>
